@@ -30,7 +30,40 @@
     mse_loss/3,
     
     % Prediction
-    predict/3
+    predict/3,
+    
+    % Module-based architecture
+    module_forward/3,
+    module_backward/4,
+    
+    % Container modules
+    sequential/1,
+    sequential_add/3,
+    sequential_forward/3,
+    concat/2,
+    concat_forward/3,
+    
+    % Transfer/Activation modules
+    sigmoid_module/1,
+    tanh_module/1,
+    relu_module/1,
+    log_softmax_module/1,
+    softmax_module/1,
+    
+    % Criterion modules
+    mse_criterion/1,
+    class_nll_criterion/1,
+    bce_criterion/1,
+    abs_criterion/1,
+    criterion_forward/4,
+    criterion_backward/4,
+    
+    % Simple layer modules
+    linear_module/3,
+    reshape_module/2,
+    mean_module/2,
+    max_module/2,
+    identity_module/1
 ]).
 
 %% ============================================================================
@@ -388,3 +421,342 @@ run_examples :-
     example_xor,
     format('~n'),
     example_regression.
+
+%% ============================================================================
+%% Module-Based Architecture
+%% ============================================================================
+%% This section implements a more modular architecture similar to Torch's nn
+%% where each component (layer, activation, criterion) is a standalone module
+%% that can be composed together.
+
+%% module_forward(+Module, +Input, -Output)
+%% Generic forward pass for any module type
+module_forward(Module, Input, Output) :-
+    Module =.. [Type|Args],
+    module_forward_dispatch(Type, Args, Input, Output).
+
+%% module_forward_dispatch(+Type, +Args, +Input, -Output)
+module_forward_dispatch(sequential, [Modules], Input, Output) :-
+    sequential_forward_impl(Modules, Input, Output).
+module_forward_dispatch(linear, [Weights, Bias], Input, Output) :-
+    linear_forward(Weights, Bias, Input, Output).
+module_forward_dispatch(sigmoid, [], Input, Output) :-
+    maplist(sigmoid, Input, Output).
+module_forward_dispatch(tanh, [], Input, Output) :-
+    maplist(tanh_activation, Input, Output).
+module_forward_dispatch(relu, [], Input, Output) :-
+    maplist(relu, Input, Output).
+module_forward_dispatch(softmax, [], Input, Output) :-
+    softmax_forward(Input, Output).
+module_forward_dispatch(log_softmax, [], Input, Output) :-
+    log_softmax_forward(Input, Output).
+module_forward_dispatch(reshape, [Shape], Input, Output) :-
+    reshape_forward(Shape, Input, Output).
+module_forward_dispatch(mean, [Dim], Input, Output) :-
+    mean_forward(Dim, Input, Output).
+module_forward_dispatch(max, [Dim], Input, Output) :-
+    max_forward(Dim, Input, Output).
+module_forward_dispatch(identity, [], Input, Input).
+module_forward_dispatch(concat, [Dim, Modules], Input, Output) :-
+    concat_forward_impl(Dim, Modules, Input, Output).
+
+%% module_backward(+Module, +Input, +GradOutput, -GradInput)
+%% Generic backward pass for any module type
+module_backward(Module, Input, GradOutput, GradInput) :-
+    Module =.. [Type|Args],
+    module_backward_dispatch(Type, Args, Input, GradOutput, GradInput).
+
+module_backward_dispatch(identity, [], _, GradOutput, GradOutput).
+% More backward implementations can be added as needed
+
+%% ============================================================================
+%% Container Modules
+%% ============================================================================
+
+%% sequential(+Modules)
+%% Creates a Sequential container that chains modules together
+sequential(Modules) :- 
+    is_list(Modules).
+
+%% sequential_add(+Sequential, +Module, -NewSequential)
+%% Adds a module to a sequential container
+sequential_add(Modules, Module, [Module|Modules]) :-
+    is_list(Modules).
+
+%% sequential_forward(+Modules, +Input, -Output)
+%% Forward pass through a sequential container
+sequential_forward(sequential(Modules), Input, Output) :-
+    sequential_forward_impl(Modules, Input, Output).
+
+sequential_forward_impl([], Output, Output).
+sequential_forward_impl([Module|Rest], Input, Output) :-
+    module_forward(Module, Input, Intermediate),
+    sequential_forward_impl(Rest, Intermediate, Output).
+
+%% concat(+Dim, +Modules)
+%% Creates a Concat container that concatenates outputs along a dimension
+concat(Dim, Modules) :-
+    integer(Dim),
+    is_list(Modules).
+
+%% concat_forward(+ConcatModule, +Input, -Output)
+%% Forward pass through concat container
+concat_forward(concat(Dim, Modules), Input, Output) :-
+    concat_forward_impl(Dim, Modules, Input, Output).
+
+concat_forward_impl(_, [], _, []).
+concat_forward_impl(Dim, [Module|Rest], Input, Output) :-
+    module_forward(Module, Input, ModuleOutput),
+    concat_forward_impl(Dim, Rest, Input, RestOutput),
+    (Dim =:= 1 -> append(ModuleOutput, RestOutput, Output) ; 
+     Output = [ModuleOutput|RestOutput]).
+
+%% ============================================================================
+%% Transfer/Activation Modules
+%% ============================================================================
+
+%% sigmoid_module(-Module)
+%% Creates a Sigmoid activation module
+sigmoid_module(sigmoid).
+
+%% tanh_module(-Module)
+%% Creates a Tanh activation module
+tanh_module(tanh).
+
+%% relu_module(-Module)
+%% Creates a ReLU activation module
+relu_module(relu).
+
+%% softmax_module(-Module)
+%% Creates a SoftMax activation module
+softmax_module(softmax).
+
+%% softmax_forward(+Input, -Output)
+%% SoftMax: exp(x_i) / sum(exp(x_j))
+softmax_forward(Input, Output) :-
+    max_list(Input, MaxVal),
+    maplist(subtract_scalar(MaxVal), Input, Shifted),
+    maplist(exp_scalar, Shifted, Exps),
+    sum_list(Exps, SumExp),
+    maplist(divide_by(SumExp), Exps, Output).
+
+exp_scalar(X, Y) :- Y is exp(X).
+subtract_scalar(Scalar, X, Y) :- Y is X - Scalar.
+divide_by(Divisor, X, Y) :- Y is X / Divisor.
+
+%% log_softmax_module(-Module)
+%% Creates a LogSoftMax activation module
+log_softmax_module(log_softmax).
+
+%% log_softmax_forward(+Input, -Output)
+%% LogSoftMax: log(exp(x_i) / sum(exp(x_j))) = x_i - log(sum(exp(x_j)))
+log_softmax_forward(Input, Output) :-
+    max_list(Input, MaxVal),
+    maplist(subtract_scalar(MaxVal), Input, Shifted),
+    maplist(exp_scalar, Shifted, Exps),
+    sum_list(Exps, SumExp),
+    LogSumExp is log(SumExp) + MaxVal,
+    maplist(subtract_scalar(LogSumExp), Input, Output).
+
+%% ============================================================================
+%% Criterion/Loss Modules
+%% ============================================================================
+
+%% mse_criterion(-Criterion)
+%% Creates an MSE (Mean Squared Error) criterion
+mse_criterion(mse_criterion).
+
+%% class_nll_criterion(-Criterion)
+%% Creates a ClassNLLCriterion (Negative Log Likelihood for classification)
+class_nll_criterion(class_nll_criterion).
+
+%% bce_criterion(-Criterion)
+%% Creates a BCE (Binary Cross Entropy) criterion
+bce_criterion(bce_criterion).
+
+%% abs_criterion(-Criterion)
+%% Creates an Absolute Error (L1) criterion
+abs_criterion(abs_criterion).
+
+%% criterion_forward(+Criterion, +Input, +Target, -Loss)
+%% Compute loss for a given criterion
+criterion_forward(mse_criterion, Input, Target, Loss) :-
+    mse_loss(Input, Target, Loss).
+criterion_forward(class_nll_criterion, Input, Target, Loss) :-
+    class_nll_loss(Input, Target, Loss).
+criterion_forward(bce_criterion, Input, Target, Loss) :-
+    bce_loss(Input, Target, Loss).
+criterion_forward(abs_criterion, Input, Target, Loss) :-
+    abs_loss(Input, Target, Loss).
+
+%% criterion_backward(+Criterion, +Input, +Target, -GradInput)
+%% Compute gradient for a given criterion
+criterion_backward(mse_criterion, Input, Target, GradInput) :-
+    subtract_vectors(Input, Target, Diff),
+    length(Input, N),
+    Scalar is 2.0 / N,
+    scalar_mult_vector(Scalar, Diff, GradInput).
+criterion_backward(class_nll_criterion, Input, Target, GradInput) :-
+    class_nll_gradient(Input, Target, GradInput).
+criterion_backward(bce_criterion, Input, Target, GradInput) :-
+    bce_gradient(Input, Target, GradInput).
+criterion_backward(abs_criterion, Input, Target, GradInput) :-
+    abs_gradient(Input, Target, GradInput).
+
+%% class_nll_loss(+LogProbs, +Target, -Loss)
+%% Negative log likelihood loss for classification
+%% Input: log probabilities, Target: class index (0-based)
+class_nll_loss(LogProbs, Target, Loss) :-
+    nth0(Target, LogProbs, LogProb),
+    Loss is -LogProb.
+
+%% class_nll_gradient(+LogProbs, +Target, -Gradient)
+class_nll_gradient(LogProbs, Target, Gradient) :-
+    length(LogProbs, N),
+    length(Gradient, N),
+    create_zero_list(N, Zeros),
+    replace_at_index(Zeros, Target, -1.0, Gradient).
+
+%% Helper to create a list of zeros
+create_zero_list(0, []).
+create_zero_list(N, [0.0|Rest]) :-
+    N > 0,
+    N1 is N - 1,
+    create_zero_list(N1, Rest).
+
+%% Helper to replace element at index
+replace_at_index([_|T], 0, Value, [Value|T]).
+replace_at_index([H|T], Index, Value, [H|Rest]) :-
+    Index > 0,
+    Index1 is Index - 1,
+    replace_at_index(T, Index1, Value, Rest).
+
+%% bce_loss(+Predicted, +Target, -Loss)
+%% Binary cross entropy: -[t*log(p) + (1-t)*log(1-p)]
+bce_loss(Predicted, Target, Loss) :-
+    bce_elements(Predicted, Target, Losses),
+    sum_list(Losses, Sum),
+    length(Losses, N),
+    Loss is Sum / N.
+
+bce_elements([], [], []).
+bce_elements([P|Ps], [T|Ts], [L|Ls]) :-
+    Epsilon is 1e-7,
+    P_clipped is max(Epsilon, min(1.0 - Epsilon, P)),
+    L is -(T * log(P_clipped) + (1.0 - T) * log(1.0 - P_clipped)),
+    bce_elements(Ps, Ts, Ls).
+
+%% bce_gradient(+Predicted, +Target, -Gradient)
+bce_gradient([], [], []).
+bce_gradient([P|Ps], [T|Ts], [G|Gs]) :-
+    Epsilon is 1e-7,
+    P_clipped is max(Epsilon, min(1.0 - Epsilon, P)),
+    G is (P_clipped - T) / (P_clipped * (1.0 - P_clipped)),
+    bce_gradient(Ps, Ts, Gs).
+
+%% abs_loss(+Predicted, +Target, -Loss)
+%% Mean absolute error (L1 loss)
+abs_loss(Predicted, Target, Loss) :-
+    abs_errors(Predicted, Target, Errors),
+    sum_list(Errors, Sum),
+    length(Errors, N),
+    Loss is Sum / N.
+
+abs_errors([], [], []).
+abs_errors([P|Ps], [T|Ts], [E|Es]) :-
+    E is abs(P - T),
+    abs_errors(Ps, Ts, Es).
+
+%% abs_gradient(+Predicted, +Target, -Gradient)
+abs_gradient([], [], []).
+abs_gradient([P|Ps], [T|Ts], [G|Gs]) :-
+    (P > T -> G = 1.0 ; (P < T -> G = -1.0 ; G = 0.0)),
+    abs_gradient(Ps, Ts, Gs).
+
+%% ============================================================================
+%% Simple Layer Modules
+%% ============================================================================
+
+%% linear_module(+InputSize, +OutputSize, -Module)
+%% Creates a Linear transformation module
+linear_module(InputSize, OutputSize, linear(Weights, Bias)) :-
+    init_layer_weights(InputSize, OutputSize, NeuronWeights),
+    extract_weights_and_biases(NeuronWeights, Weights, Bias).
+
+extract_weights_and_biases([], [], []).
+extract_weights_and_biases([neuron(W, B)|Rest], [W|Ws], [B|Bs]) :-
+    extract_weights_and_biases(Rest, Ws, Bs).
+
+%% linear_forward(+Weights, +Bias, +Input, -Output)
+linear_forward(Weights, Bias, Input, Output) :-
+    matrix_vector_mult(Weights, Input, WeightedSum),
+    add_vectors(WeightedSum, Bias, Output).
+
+%% reshape_module(+Shape, -Module)
+%% Creates a Reshape module
+reshape_module(Shape, reshape(Shape)).
+
+%% reshape_forward(+Shape, +Input, -Output)
+reshape_forward(Shape, Input, Output) :-
+    flatten(Input, Flat),
+    reshape_to_shape(Flat, Shape, Output).
+
+reshape_to_shape(Flat, [], Flat) :- !.
+reshape_to_shape(Flat, [Dim], Flat) :- 
+    length(Flat, Dim), !.
+reshape_to_shape(Flat, [Dim|RestDims], Output) :-
+    length(RestDims, NumDims),
+    NumDims > 0,
+    product(RestDims, RestProduct),
+    split_list(Flat, RestProduct, Groups),
+    length(Groups, Dim),
+    maplist(reshape_to_shape_partial(RestDims), Groups, Output).
+
+reshape_to_shape_partial(Shape, Input, Output) :-
+    reshape_to_shape(Input, Shape, Output).
+
+product([], 1).
+product([X|Xs], P) :-
+    product(Xs, P0),
+    P is X * P0.
+
+split_list([], _, []).
+split_list(List, Size, [Chunk|Rest]) :-
+    length(Chunk, Size),
+    append(Chunk, Remainder, List),
+    split_list(Remainder, Size, Rest).
+
+%% mean_module(+Dim, -Module)
+%% Creates a Mean reduction module
+mean_module(Dim, mean(Dim)).
+
+%% mean_forward(+Dim, +Input, -Output)
+mean_forward(1, Input, Output) :-
+    (is_list(Input), Input = [H|_], is_list(H) ->
+        transpose(Input, Transposed),
+        maplist(mean_list, Transposed, Output)
+    ;
+        mean_list(Input, Output)
+    ).
+
+mean_list(List, Mean) :-
+    sum_list(List, Sum),
+    length(List, N),
+    Mean is Sum / N.
+
+%% max_module(+Dim, -Module)
+%% Creates a Max reduction module
+max_module(Dim, max(Dim)).
+
+%% max_forward(+Dim, +Input, -Output)
+max_forward(1, Input, Output) :-
+    (is_list(Input), Input = [H|_], is_list(H) ->
+        transpose(Input, Transposed),
+        maplist(max_list, Transposed, Output)
+    ;
+        max_list(Input, Output)
+    ).
+
+%% identity_module(-Module)
+%% Creates an Identity module (passes input through unchanged)
+identity_module(identity).
