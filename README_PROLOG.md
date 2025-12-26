@@ -1,13 +1,41 @@
 # nn.pl - Neural Network Implementation in Pure Prolog
 
-A minimal, pure Prolog implementation of feedforward neural networks with backpropagation training.
+A comprehensive, pure Prolog implementation of neural networks with a modular architecture inspired by Torch/nn. Features feedforward networks, backpropagation training, multiple activation functions, loss criterions, and composable container modules.
 
 ## Features
 
+### Core Features
 - **Pure Prolog implementation** - No external dependencies, works with standard SWI-Prolog
 - **Feedforward neural networks** - Multi-layer perceptron architecture
 - **Backpropagation training** - Gradient descent with configurable learning rate
-- **Multiple activation functions** - Sigmoid, Tanh, and ReLU
+- **Modular architecture** - Composable modules similar to Torch/nn
+
+### Module-Based Architecture (NEW!)
+- **Container Modules**:
+  - `Sequential`: Chain modules together in a feed-forward manner
+  - `Concat`: Concatenate outputs from multiple parallel modules
+  
+- **Activation/Transfer Modules**:
+  - `Sigmoid`: Logistic sigmoid activation
+  - `Tanh`: Hyperbolic tangent activation
+  - `ReLU`: Rectified Linear Unit activation
+  - `SoftMax`: Softmax for multi-class probabilities
+  - `LogSoftMax`: Log-Softmax for numerical stability
+
+- **Criterion/Loss Modules**:
+  - `MSECriterion`: Mean Squared Error for regression
+  - `ClassNLLCriterion`: Negative Log Likelihood for classification
+  - `BCECriterion`: Binary Cross Entropy for binary classification
+  - `AbsCriterion`: L1/Absolute Error loss
+
+- **Simple Layer Modules**:
+  - `Linear`: Fully connected linear transformation
+  - `Identity`: Pass-through layer
+  - `Reshape`: Reshape tensors
+  - `Mean`: Mean reduction along a dimension
+  - `Max`: Max reduction along a dimension
+
+### Traditional Interface
 - **Vector/Matrix operations** - Dot products, matrix multiplication, etc.
 - **Loss functions** - Mean Squared Error (MSE)
 - **Example problems** - XOR and simple regression examples included
@@ -34,14 +62,14 @@ Then in the Prolog REPL:
 
 ## Quick Start
 
-### Creating a Network
+### Traditional Interface: Creating a Network
 
 ```prolog
 % Create a network with 2 inputs, 3 hidden neurons, and 1 output
 ?- create_network([2, 3, 1], Network, Weights).
 ```
 
-### Making Predictions
+### Traditional Interface: Making Predictions
 
 ```prolog
 % Forward propagation
@@ -49,7 +77,7 @@ Then in the Prolog REPL:
    predict([0.5, 0.8], Network, Output).
 ```
 
-### Training a Network
+### Traditional Interface: Training a Network
 
 ```prolog
 % Train on XOR problem
@@ -62,6 +90,34 @@ Then in the Prolog REPL:
    ],
    train(TrainingData, Network, 0.5, 1000, TrainedNetwork),
    predict([1, 1], TrainedNetwork, Output).
+```
+
+### NEW! Module-Based Interface: Building Networks
+
+```prolog
+% Build a classification network using Sequential
+?- nn:linear_module(2, 4, L1),
+   nn:tanh_module(Tanh),
+   nn:linear_module(4, 3, L2),
+   nn:log_softmax_module(LogSoftMax),
+   Network = sequential([L1, Tanh, L2, LogSoftMax]),
+   nn:sequential_forward(Network, [0.5, 0.8], Output).
+```
+
+### NEW! Using Different Loss Functions
+
+```prolog
+% MSE for regression
+?- nn:mse_criterion(MSE),
+   nn:criterion_forward(MSE, [1.5, 2.3], [1.0, 2.0], Loss).
+
+% ClassNLL for classification
+?- nn:class_nll_criterion(NLL),
+   nn:criterion_forward(NLL, [-0.5, -1.2, -2.3], 0, Loss).
+
+% Binary Cross Entropy
+?- nn:bce_criterion(BCE),
+   nn:criterion_forward(BCE, [0.8, 0.3], [1.0, 0.0], Loss).
 ```
 
 ## API Reference
@@ -139,7 +195,129 @@ Element-wise vector addition.
 #### `matrix_vector_mult(+Matrix, +Vector, -Result)`
 Matrix-vector multiplication.
 
+## Module-Based API Reference (NEW!)
+
+The module-based interface provides a more flexible and composable way to build neural networks, similar to PyTorch or Torch/nn.
+
+### Container Modules
+
+#### `sequential(+Modules)`
+Creates a Sequential container that chains modules together in feed-forward manner.
+
+```prolog
+?- nn:linear_module(10, 20, L1),
+   nn:relu_module(ReLU),
+   nn:linear_module(20, 10, L2),
+   Network = sequential([L1, ReLU, L2]).
+```
+
+#### `sequential_forward(+Sequential, +Input, -Output)`
+Performs forward pass through a sequential container.
+
+#### `concat(+Dim, +Modules)`
+Creates a Concat container that applies each module to the input and concatenates outputs.
+
+```prolog
+?- nn:identity_module(Branch1),
+   nn:identity_module(Branch2),
+   Network = concat(1, [Branch1, Branch2]).
+```
+
+### Activation/Transfer Modules
+
+#### `sigmoid_module(-Module)`
+Creates a Sigmoid activation module.
+
+#### `tanh_module(-Module)`
+Creates a Tanh activation module.
+
+#### `relu_module(-Module)`
+Creates a ReLU activation module.
+
+#### `softmax_module(-Module)`
+Creates a SoftMax module that converts logits to probabilities.
+
+#### `log_softmax_module(-Module)`
+Creates a LogSoftMax module (log of softmax, numerically stable).
+
+#### `module_forward(+Module, +Input, -Output)`
+Generic forward pass through any module.
+
+```prolog
+?- nn:sigmoid_module(Sigmoid),
+   nn:module_forward(Sigmoid, [0, 1, -1], Output).
+```
+
+### Criterion/Loss Modules
+
+#### `mse_criterion(-Criterion)`
+Mean Squared Error criterion for regression.
+
+#### `class_nll_criterion(-Criterion)`
+Negative Log Likelihood criterion for classification (use with LogSoftMax).
+
+#### `bce_criterion(-Criterion)`
+Binary Cross Entropy criterion for binary classification.
+
+#### `abs_criterion(-Criterion)`
+L1/Absolute Error criterion.
+
+#### `criterion_forward(+Criterion, +Input, +Target, -Loss)`
+Computes loss for a given criterion.
+
+```prolog
+?- nn:mse_criterion(MSE),
+   nn:criterion_forward(MSE, [1.5, 2.3], [1.0, 2.0], Loss).
+```
+
+#### `criterion_backward(+Criterion, +Input, +Target, -GradInput)`
+Computes gradient for backpropagation.
+
+### Simple Layer Modules
+
+#### `linear_module(+InputSize, +OutputSize, -Module)`
+Creates a fully connected linear layer.
+
+```prolog
+?- nn:linear_module(10, 5, Linear).
+```
+
+#### `identity_module(-Module)`
+Creates an Identity module (pass-through).
+
+#### `reshape_module(+Shape, -Module)`
+Creates a Reshape module.
+
+#### `mean_module(+Dim, -Module)`
+Creates a Mean reduction module.
+
+#### `max_module(+Dim, -Module)`
+Creates a Max reduction module.
+
 ## Examples
+
+### Example: Building a Classification Network with Modules
+
+```prolog
+% Load the library
+?- consult('nn.pl').
+
+% Build a 2-layer network for 3-class classification
+?- nn:linear_module(5, 10, L1),
+   nn:tanh_module(Tanh),
+   nn:linear_module(10, 3, L2),
+   nn:log_softmax_module(LogSoftMax),
+   Network = sequential([L1, Tanh, L2, LogSoftMax]),
+   
+   % Forward pass
+   Input = [0.1, 0.2, 0.3, 0.4, 0.5],
+   nn:sequential_forward(Network, Input, LogProbs),
+   
+   % Compute loss
+   nn:class_nll_criterion(NLL),
+   Target = 1,  % Correct class
+   nn:criterion_forward(NLL, LogProbs, Target, Loss).
+```
 
 ### XOR Problem
 
@@ -187,8 +365,14 @@ Testing predictions:
 
 ## Running Tests
 
+Run the traditional interface tests:
 ```bash
 swipl -q -l test_nn.pl -g run_tests -t halt
+```
+
+Run the module-based interface tests:
+```bash
+swipl -q -l test_modules.pl -g run_module_tests -t halt
 ```
 
 Or within the Prolog REPL:
@@ -196,7 +380,31 @@ Or within the Prolog REPL:
 ```prolog
 ?- consult('test_nn.pl').
 ?- run_tests.
+
+?- consult('test_modules.pl').
+?- run_module_tests.
 ```
+
+## Running Demos
+
+Run the traditional demos:
+```bash
+swipl -l demo.pl -g "run_all_demos" -t halt
+```
+
+Run the module-based demos (NEW!):
+```bash
+swipl -l demo_modules.pl -g "run_all_demos" -t halt
+```
+
+The module demos include:
+- Sequential classification networks
+- Comparing different activation functions
+- Using different loss functions
+- Simple layer operations
+- SoftMax vs LogSoftMax
+- Building complex multi-layer networks
+- Using Concat containers
 
 ## Architecture
 
@@ -217,7 +425,7 @@ The implementation consists of several key components:
 
 ## Limitations
 
-- Currently only supports sigmoid activation in backpropagation (tanh and relu are available but not fully integrated)
+- Backpropagation currently only integrated with traditional interface (module-based training coming soon)
 - Full batch training only (no mini-batch or stochastic gradient descent)
 - No regularization (L1/L2)
 - No momentum or adaptive learning rates
