@@ -1,6 +1,12 @@
 %% Neural Network Implementation in Pure Prolog
 %% A minimal, pure Prolog implementation of feedforward neural networks
 %% with backpropagation training.
+%%
+%% Note: Some utility predicates (derivative functions, scalar_mult_vector)
+%% are defined but not exported. They are available for internal use and
+%% for users who want to extend the module. The module currently uses
+%% sigmoid activation in backpropagation, but tanh and relu are provided
+%% for forward propagation and can be integrated if needed.
 
 :- module(nn, [
     % Network creation and structure
