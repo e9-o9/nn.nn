@@ -5,3 +5,6 @@ THNN_h.lua
 *.go
 *.scm~
 *~
+
+# Raku precompiled files
+.precomp/

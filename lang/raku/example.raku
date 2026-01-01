@@ -63,23 +63,23 @@ say "Training completed!";
 say "";
 say "Step 5: Testing trained network...";
 say "Predictions after training:";
-my $result-00 = predict([0.0, 0.0], $trained-network)[0];
-my $result-01 = predict([0.0, 1.0], $trained-network)[0];
-my $result-10 = predict([1.0, 0.0], $trained-network)[0];
-my $result-11 = predict([1.0, 1.0], $trained-network)[0];
+my $result00 = predict([0.0, 0.0], $trained-network)[0];
+my $result01 = predict([0.0, 1.0], $trained-network)[0];
+my $result10 = predict([1.0, 0.0], $trained-network)[0];
+my $result11 = predict([1.0, 1.0], $trained-network)[0];
 
 printf "  XOR(0, 0) = %.4f (expected 0) %s\n", 
-    $result-00,
-    $result-00 < 0.2 ?? "✓" !! "✗";
+    $result00,
+    $result00 < 0.2 ?? "✓" !! "✗";
 printf "  XOR(0, 1) = %.4f (expected 1) %s\n", 
-    $result-01,
-    $result-01 > 0.8 ?? "✓" !! "✗";
+    $result01,
+    $result01 > 0.8 ?? "✓" !! "✗";
 printf "  XOR(1, 0) = %.4f (expected 1) %s\n", 
-    $result-10,
-    $result-10 > 0.8 ?? "✓" !! "✗";
+    $result10,
+    $result10 > 0.8 ?? "✓" !! "✗";
 printf "  XOR(1, 1) = %.4f (expected 0) %s\n", 
-    $result-11,
-    $result-11 < 0.2 ?? "✓" !! "✗";
+    $result11,
+    $result11 < 0.2 ?? "✓" !! "✗";
 
 # Step 6: Summary
 say "";
