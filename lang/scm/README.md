@@ -20,13 +20,18 @@ A comprehensive, pure Scheme implementation of feedforward neural networks with 
 
 ### Pure Scheme Implementation
 - No external dependencies
-- Works with standard Scheme implementations (Guile, MIT Scheme, Racket, etc.)
+- Designed for GNU Guile (recommended)
+- May require minor adjustments for other Scheme implementations (see Compatibility section)
 - Clear, readable, and educational code
 - Suitable for learning and prototyping
 
 ## Installation
 
 No installation required! Simply load the `nn.scm` file in your Scheme interpreter.
+
+### Requirements
+- GNU Guile 3.0+ (recommended and tested)
+- For other implementations, see the Compatibility Notes section below
 
 ### Compatibility
 
@@ -445,6 +450,34 @@ This implementation is ideal for:
 - Limited to feedforward networks
 - Basic backpropagation implementation
 - No advanced optimization algorithms (Adam, RMSprop, etc.)
+
+## Compatibility Notes
+
+This implementation is designed and tested for **GNU Guile 3.0+**. For use with other Scheme implementations, the following adjustments may be needed:
+
+### Known Compatibility Considerations
+
+1. **Random Number Generation** (`random` function):
+   - Guile: `(random N)` returns integer in range [0, N)
+   - MIT Scheme and others may have different APIs
+   - **Solution**: Replace `random` calls with implementation-specific equivalents
+
+2. **Format Function** (in test-nn.scm):
+   - The `format` function is Guile-specific
+   - **Solution**: Use `simple-format` or `number->string` for portability
+   - Test file includes a compatibility shim for Guile
+
+3. **Script Execution** (example.scm shebang):
+   - Uses `#!/usr/bin/env -S guile --no-auto-compile -s`
+   - The `-S` flag is GNU-specific
+   - **Solution**: Run as `guile -s example.scm` or adjust for your shell
+
+### Porting to Other Implementations
+
+If you need to use this with MIT Scheme, Racket, or Chicken Scheme:
+- Replace `(random 10000)` with your implementation's random number generator
+- Replace `format` calls with portable string construction
+- Use `load` instead of relying on shebangs for script execution
 
 ## Future Enhancements
 
