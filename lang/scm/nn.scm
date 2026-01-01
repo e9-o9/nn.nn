@@ -240,9 +240,13 @@
          (output-delta (mse-loss-derivative output target)))
     ;; Simplified weight update for output layer only
     (let* ((last-layer (car (reverse weights)))
-           (last-activation (car (reverse (cdr activations))))
-           (output-deltas (map (lambda (od a) (* od (sigmoid-derivative a)))
-                               output-delta output))
+           (last-activation (if (< (length activations) 2)
+                               input
+                               (list-ref activations (- (length activations) 2))))
+           (pre-activation (map (lambda (neuron) (neuron-output neuron last-activation))
+                               last-layer))
+           (output-deltas (vector-map2 (lambda (od pa) (* od (sigmoid-derivative pa)))
+                                       output-delta pre-activation))
            (updated-last-layer (update-layer-weights last-layer last-activation 
                                                      output-deltas learning-rate))
            (updated-weights (append (reverse (cdr (reverse weights)))
